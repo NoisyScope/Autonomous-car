@@ -3,18 +3,10 @@ import numpy as np # Import the NumPy scientific computing library
 import edge_detection as edge # Handles the detection of lane lines
 import matplotlib.pyplot as plt # Used for plotting and error checking
 
-# Author: Addison Sears-Collins
-# https://automaticaddison.com
-# Description: Implementation of the Lane class 
-
-# Make sure the video file is in the same directory as your code
-filename = 'media_files\Texas.mp4'
-file_size = (1280,720) # Assumes 1920x1080 mp4
+filename = cv2.VideoCapture(0)
+file_size = (1920,1080) # Assumes 1920x1080 mp4
 scale_ratio = 1 # Option to scale to fraction of original size. 
 
-# We want to save the output to a video file
-output_filename = 'lane_detection.mp4'
-output_frames_per_second = 20.0 
 
 # Global variables
 prev_leftx = None
@@ -292,7 +284,7 @@ class Lane:
     prev_right_fit2.append(right_fit)
 
     # Calculate the moving average	
-    if len(prev_left_fit2) > 10:
+    if len(prev_left_fit2) > 25:
       prev_left_fit2.pop(0)
       prev_right_fit2.pop(0)
       left_fit = sum(prev_left_fit2) / len(prev_left_fit2)
@@ -373,7 +365,7 @@ class Lane:
     frame_sliding_window = self.warped_frame.copy()
 
     # Set the height of the sliding windows
-    window_height = int(self.warped_frame.shape[0]/self.no_of_windows)		
+    window_height = np.int32(self.warped_frame.shape[0]/self.no_of_windows)		
 
     # Find the x and y coordinates of all the nonzero 
     # (i.e. white) pixels in the frame.	
@@ -423,9 +415,9 @@ class Lane:
       # If you found > minpix pixels, recenter next window on mean position
       minpix = self.minpix
       if len(good_left_inds) > minpix:
-        leftx_current = int(np.mean(nonzerox[good_left_inds]))
+        leftx_current = np.int32(np.mean(nonzerox[good_left_inds]))
       if len(good_right_inds) > minpix:        
-        rightx_current = int(np.mean(nonzerox[good_right_inds]))
+        rightx_current = np.int32(np.mean(nonzerox[good_right_inds]))
 					
     # Concatenate the arrays of indices
     left_lane_inds = np.concatenate(left_lane_inds)
@@ -550,7 +542,7 @@ class Lane:
     # White in the regions with the purest hue colors (e.g. >130...play with
     # this value for best results).
     s_channel = hls[:, :, 2] # use only the saturation channel data
-    _, s_binary = edge.threshold(s_channel, (130, 255))
+    _, s_binary = edge.threshold(s_channel, (80, 255))
 	
     # Perform binary thresholding on the R (red) channel of the 
 		# original BGR video frame. 
@@ -580,7 +572,7 @@ class Lane:
     Return the x coordinate of the left histogram peak and the right histogram
     peak.
     """
-    midpoint = int(self.histogram.shape[0]/2)
+    midpoint = np.int32(self.histogram.shape[0]/2)
     leftx_base = np.argmax(self.histogram[:midpoint])
     rightx_base = np.argmax(self.histogram[midpoint:]) + midpoint
 
@@ -705,15 +697,9 @@ class Lane:
 def main():
 
   # Load a video
-  cap = cv2.VideoCapture(filename)
+  cap = filename
 
-  # Create a VideoWriter object so we can save the video output
-  fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-  result = cv2.VideoWriter(output_filename,  
-                           fourcc, 
-                           output_frames_per_second, 
-                           file_size) 
-	
+  
   # Process the video
   while cap.isOpened():
 		
@@ -750,13 +736,13 @@ def main():
 	
       # Find lane line pixels using the sliding window method 
       left_fit, right_fit = lane_obj.get_lane_line_indices_sliding_windows(
-        plot=True)
+        plot=False)
 
       # Fill in the lane line
       lane_obj.get_lane_line_previous_window(left_fit, right_fit, plot=False)
 	
       # Overlay lines on the original frame
-      frame_with_lane_lines = lane_obj.overlay_lane_lines(plot=True)
+      frame_with_lane_lines = lane_obj.overlay_lane_lines(plot=False)
 
       # Calculate lane line curvature (left and right lane lines)
       lane_obj.calculate_curvature(print_to_terminal=False)
@@ -766,11 +752,8 @@ def main():
 	
       # Display curvature and center offset on image
       frame_with_lane_lines2 = lane_obj.display_curvature_offset(
-        frame=frame_with_lane_lines, plot=True)
-				
-      # Write the frame to the output video file
-      result.write(frame_with_lane_lines2)
-			
+        frame=frame_with_lane_lines, plot=False)
+						
       # Display the frame 
       cv2.imshow("Frame", frame_with_lane_lines2) 	
 

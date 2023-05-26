@@ -4,7 +4,7 @@ import edge_detection as edge # Handles the detection of lane lines
 import matplotlib.pyplot as plt # Used for plotting and error checking
 
 filename = cv2.VideoCapture(0)
-file_size = (1920,1080) # Assumes 1920x1080 mp4
+file_size = (640,480) #Defines video input resolution
 scale_ratio = 1 # Option to scale to fraction of original size. 
 
 
@@ -94,8 +94,8 @@ class Lane:
     self.righty = None
 		
     # Pixel parameters for x and y dimensions
-    self.YM_PER_PIX = 7.0 / 400 # meters per pixel in y dimension
-    self.XM_PER_PIX = 3.7 / 255 # meters per pixel in x dimension
+    self.YM_PER_PIX = 4 / 400 # meters per pixel in y dimension
+    self.XM_PER_PIX = 0.4 / 255 # meters per pixel in x dimension
 		
     # Radii of curvature and offset
     self.left_curvem = None
@@ -209,13 +209,13 @@ class Lane:
       5/600)*self.width), int((
       20/338)*self.height)), cv2.FONT_HERSHEY_SIMPLEX, (float((
       0.5/600)*self.width)),(
-      255,255,255),2,cv2.LINE_AA)
+      0,255,0),2,cv2.LINE_AA)
     cv2.putText(image_copy,'Center Offset: '+str(
       self.center_offset)[:7]+' cm', (int((
       5/600)*self.width), int((
       40/338)*self.height)), cv2.FONT_HERSHEY_SIMPLEX, (float((
       0.5/600)*self.width)),(
-      255,255,255),2,cv2.LINE_AA)
+      0,255,0),2,cv2.LINE_AA)
 			
     if plot==True:       
       cv2.imshow("Image with Curvature and Offset", image_copy)
@@ -542,7 +542,7 @@ class Lane:
     # White in the regions with the purest hue colors (e.g. >130...play with
     # this value for best results).
     s_channel = hls[:, :, 2] # use only the saturation channel data
-    _, s_binary = edge.threshold(s_channel, (80, 255))
+    _, s_binary = edge.threshold(s_channel, (50, 180))
 	
     # Perform binary thresholding on the R (red) channel of the 
 		# original BGR video frame. 
@@ -748,7 +748,7 @@ def main():
       lane_obj.calculate_curvature(print_to_terminal=False)
 
       # Calculate center offset  																
-      lane_obj.calculate_car_position(print_to_terminal=False)
+      lane_obj.calculate_car_position(print_to_terminal=True)
 	
       # Display curvature and center offset on image
       frame_with_lane_lines2 = lane_obj.display_curvature_offset(
@@ -765,12 +765,7 @@ def main():
     # No more video frames left
     else:
       break
-			
-  # Stop when the video is finished
-  cap.release()
-	
-  # Release the video recording
-  result.release()
+
 	
   # Close all windows
   cv2.destroyAllWindows() 

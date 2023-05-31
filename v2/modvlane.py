@@ -2,9 +2,17 @@ import cv2 # Import the OpenCV library to enable computer vision
 import numpy as np # Import the NumPy scientific computing library
 import edge_detection as edge # Handles the detection of lane lines
 import matplotlib.pyplot as plt # Used for plotting and error checking
+import picar
+import os
+import threading
+import time
+from picar import front_wheels, back_wheels
+from picar.SunFounder_PCA9685 import Servo
+
+
 
 filename = cv2.VideoCapture(0)
-file_size = (640,480) #Defines video input resolution
+file_size = (640,480) # Assumes 1920x1080 mp4
 scale_ratio = 1 # Option to scale to fraction of original size. 
 
 
@@ -22,6 +30,35 @@ prev_rightx2 = None
 prev_righty2 = None
 prev_left_fit2 = []
 prev_right_fit2 = []
+# Car initialization settings
+picar.setup()
+# Initial parameter configuration
+show_image_enable = False
+draw_circle_enable  = False
+scan_enable         = False
+rear_wheels_enable  = True
+front_wheels_enable = True
+pan_tilt_enable     = True
+
+# Picar parameter definition
+bw = back_wheels.Back_Wheels()
+fw = front_wheels.Front_Wheels()
+pan_servo = Servo.Servo(1)
+tilt_servo = Servo.Servo(2)
+bw.speed = 0
+fw.turn(90)
+pan_servo.write(90)
+tilt_servo.offset = 0
+motor_speed = 60
+kp = 0.01 # Proportional controller
+MIDDLE_TOLERANT = 5
+PAN_ANGLE_MAX   = 170
+PAN_ANGLE_MIN   = 10
+TILT_ANGLE_MAX  = 150
+TILT_ANGLE_MIN  = 70
+FW_ANGLE_MAX    = 90+30
+FW_ANGLE_MIN    = 90-30
+FW_STRAIGHT     = 90
 
 class Lane:
   """
@@ -54,10 +91,10 @@ class Lane:
     # Four corners of the trapezoid-shaped region of interest
     # You need to find these corners manually.
     self.roi_points = np.float32([
-      (int(0.456*width),int(0.544*height)), # Top-left corner
-      (0, height-1), # Bottom-left corner			
-      (int(0.958*width),height-1), # Bottom-right corner
-      (int(0.6183*width),int(0.544*height)) # Top-right corner
+      (int(0.436*width),int(0.179*height)), # Top-left corner
+      (0, 0.89*height), # Bottom-left corner			
+      (int(0.988*width),0.92*height), # Bottom-right corner
+      (int(0.675*width),int(0.179*height)) # Top-right corner
     ])
 		
     # The desired corner locations  of the region of interest
@@ -94,15 +131,15 @@ class Lane:
     self.righty = None
 		
     # Pixel parameters for x and y dimensions
-    self.YM_PER_PIX = 4 / 400 # meters per pixel in y dimension
-    self.XM_PER_PIX = 0.4 / 255 # meters per pixel in x dimension
-		
+    self.YM_PER_PIX = 1.0 / 371 # meters per pixel in y dimension
+    self.XM_PER_PIX = 0.4 / 183 # meters per pixel in x dimension
+  
     # Radii of curvature and offset
     self.left_curvem = None
     self.right_curvem = None
     self.center_offset = None
 
-  def calculate_car_position(self, print_to_terminal=False):
+  def calculate_car_position(self, print_to_terminal=True):
     """
     Calculate the position of the car relative to the center
 		
@@ -209,13 +246,13 @@ class Lane:
       5/600)*self.width), int((
       20/338)*self.height)), cv2.FONT_HERSHEY_SIMPLEX, (float((
       0.5/600)*self.width)),(
-      0,255,0),2,cv2.LINE_AA)
+      255,255,255),2,cv2.LINE_AA)
     cv2.putText(image_copy,'Center Offset: '+str(
       self.center_offset)[:7]+' cm', (int((
       5/600)*self.width), int((
       40/338)*self.height)), cv2.FONT_HERSHEY_SIMPLEX, (float((
       0.5/600)*self.width)),(
-      0,255,0),2,cv2.LINE_AA)
+      255,255,255),2,cv2.LINE_AA)
 			
     if plot==True:       
       cv2.imshow("Image with Curvature and Offset", image_copy)
@@ -542,7 +579,7 @@ class Lane:
     # White in the regions with the purest hue colors (e.g. >130...play with
     # this value for best results).
     s_channel = hls[:, :, 2] # use only the saturation channel data
-    _, s_binary = edge.threshold(s_channel, (50, 180))
+    _, s_binary = edge.threshold(s_channel, (120, 255))
 	
     # Perform binary thresholding on the R (red) channel of the 
 		# original BGR video frame. 
@@ -550,7 +587,7 @@ class Lane:
     # White in the regions with the richest red channel values (e.g. >120).
     # Remember, pure white is bgr(255, 255, 255).
     # Pure yellow is bgr(0, 255, 255). Both have high red channel values.
-    _, r_thresh = edge.threshold(frame[:, :, 2], thresh=(120, 255))
+    _, r_thresh = edge.threshold(frame[:, :, 2], thresh=(0, 255))
 
     # Lane lines should be pure in color and have high red channel values 
     # Bitwise AND operation to reduce noise and black-out any pixels that
@@ -694,6 +731,32 @@ class Lane:
 
     cv2.destroyAllWindows()
 	
+  def car_movement(self):
+    center_offset = self.center_offset
+    print(center_offset)
+    bw.forward()
+
+    if float(center_offset)>1:
+        fw_angle=FW_STRAIGHT-(float(center_offset)*kp) #giro derecha
+        bw.speed = motor_speed
+        fw.turn(fw_angle)
+    # Corrección de ángulo en caso de sobrepasar los límites
+        if fw_angle < FW_ANGLE_MIN or fw_angle > FW_ANGLE_MAX:
+            fw_angle = ((180 - fw_angle) - 90)/2 + 90
+            fw.turn(fw_angle)
+
+    elif float(center_offset)<-1:
+        fw_angle=FW_STRAIGHT+(float(center_offset)*kp) #giro derecha
+        bw.speed = motor_speed
+        fw.turn(fw_angle)
+    # Corrección de ángulo en caso de sobrepasar los límites
+        if fw_angle < FW_ANGLE_MIN or fw_angle > FW_ANGLE_MAX:
+            fw_angle = ((180 - fw_angle) - 90)/2 + 90
+            fw.turn(fw_angle)
+    else:
+        bw.speed = motor_speed
+        fw.turn(FW_STRAIGHT)
+
 def main():
 
   # Load a video
@@ -748,15 +811,18 @@ def main():
       lane_obj.calculate_curvature(print_to_terminal=False)
 
       # Calculate center offset  																
-      lane_obj.calculate_car_position(print_to_terminal=True)
+      lane_obj.calculate_car_position(print_to_terminal=False)
 	
       # Display curvature and center offset on image
       frame_with_lane_lines2 = lane_obj.display_curvature_offset(
         frame=frame_with_lane_lines, plot=False)
 						
       # Display the frame 
-      cv2.imshow("Frame", frame_with_lane_lines2) 	
+      cv2.imshow("Frame", frame_with_lane_lines2)
 
+      # Start the vehicle movement
+      lane_obj.car_movement()
+      
       # Display frame for X milliseconds and check if q key is pressed
       # q == quit
       if cv2.waitKey(25) & 0xFF == ord('q'):
@@ -765,9 +831,14 @@ def main():
     # No more video frames left
     else:
       break
-
+			
+  # Stop when the video is finished
+  cap.release()
+	
+  # Release the video recording
+  result.release()
 	
   # Close all windows
   cv2.destroyAllWindows() 
-	
+
 main()

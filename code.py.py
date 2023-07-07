@@ -7,12 +7,10 @@ from picar import front_wheels, back_wheels
 from picar.SunFounder_PCA9685 import Servo
 
 
-def nothing(x):pass
-
 cap = cv.VideoCapture(0)
 cv.namedWindow('videoUI', cv.WINDOW_NORMAL)
 T=240
-x=0
+
 # Picar parameter definition
 picar.setup()
 bw = back_wheels.Back_Wheels()
@@ -35,7 +33,6 @@ FW_ANGLE_MIN    = 90-30
 FW_STRAIGHT     = 90
 
 def find_centroid(frame):
-    global x
     global error
     error = 0
     while x < 3:
